@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/WJL"/>
+    <qresource prefix="/wjl">
+        <file>Imgs/loginBg.jpg</file>
+    </qresource>
+</RCC>

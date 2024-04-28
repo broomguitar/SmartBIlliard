@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/WJL"/>
+    <qresource prefix="/">
+        <file>Imgs/loginBg.jpg</file>
+        <file>Imgs/loginBg-1.jpg</file>
+        <file>Imgs/MainBg.jpg</file>
+    </qresource>
+</RCC>
