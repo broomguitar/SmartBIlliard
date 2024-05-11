@@ -30,7 +30,7 @@ PlayControl::PlayControl(QWidget *parent)
     m_bThreadState =false;
     m_bStartGrabbing = false;
     m_bOpenDevice = false;
-    nRet = MV_OK;
+    m_nRet = MV_OK;
     m_hGrabThread = nullptr;
     m_bContinueStarted = 0;
     m_nSaveImageType = MV_Image_Bmp;
@@ -54,7 +54,10 @@ PlayControl::~PlayControl()
     }
     delete ui;
 }
-
+void PlayControl::paintEvent(QPaintEvent *paintEvent)
+{
+    ui->label_play->resize(size());
+}
 //错误信息
 // ch:显示错误信息 | en:Show error message
 void PlayControl::showErrorMsg(QString qMessage, int nErrorNum)
@@ -77,19 +80,18 @@ void PlayControl::on_pushButton_open_clicked()
     if(m_pcHikCamera==nullptr){
         showErrorMsg(("Open Failure"),1);
     }
-    nRet=m_pcHikCamera->Open();
-    if(nRet !=MV_OK){
+    m_nRet=m_pcHikCamera->Open();
+    if(m_nRet !=MV_OK){
         showErrorMsg(("Open Failure"),1);
     }
     else{
         m_bOpenDevice=true;
-        int ret=m_pcHikCamera->GetTriggerMode(&m_nTriggerMode);
+        m_nRet=m_pcHikCamera->GetTriggerMode(&m_nTriggerMode);
         if(m_nTriggerMode==0){
             ui->radioButton_continueMode->setChecked(true);
         }
         else if(m_nTriggerMode==1){
             ui->radioButton_softTriggerMode->setChecked(true);
-             ui->pushButton_softTrigger->setEnabled(true);
         }
         m_pcHikCamera->RegisterImageCallBack(&callbackFunc,this);
         ui->pushButton_open->setEnabled(false);
@@ -115,6 +117,8 @@ void PlayControl::on_pushButton_close_clicked()
     ui->pushButton_softTrigger->setEnabled(false);
     ui->pushButton_grabbing->setEnabled(false);
     ui->pushButton_stop->setEnabled(false);
+    ui->pushButton_saveBmp->setEnabled(false);
+    ui->pushButton_saveJpg->setEnabled(false);
     ui->radioButton_continueMode->setEnabled(false);
     ui->radioButton_softTriggerMode->setEnabled(false);
 
@@ -132,20 +136,18 @@ void PlayControl::on_radioButton_continueMode_clicked()
 {
     m_nTriggerMode = TRIGGER_OFF;
     m_pcHikCamera->SetTriggerMode(m_nTriggerMode);
+    ui->pushButton_softTrigger->setEnabled(false);
 }
 
 // ch:按下触发模式按钮 | en:Click Trigger Mode button
 void PlayControl::on_radioButton_softTriggerMode_clicked()
 {
-    // if (m_bContinueStarted == 1)
-    // {
-    //     on_pushButton_stop_clicked();
-    // }
-    // m_bContinueStarted = 0;
     m_nTriggerMode = TRIGGER_ON;
     m_pcHikCamera->SetTriggerMode(m_nTriggerMode);
     m_pcHikCamera->SetTriggerSource(TRIGGER_SOURCE_SOFTWARE);
+    if(m_bContinueStarted){
     ui->pushButton_softTrigger->setEnabled(true);
+    }
 }
 
 //软触发一次
@@ -156,9 +158,9 @@ void PlayControl::on_pushButton_softTrigger_clicked()
 
     if (m_bContinueStarted == 1&&m_nTriggerMode == TRIGGER_ON)
     {
-        nRet = MV_OK;
-        nRet = m_pcHikCamera->SoftTrigger();
-       // m_pcHikCamera->ReadBuffer(*myImage);
+        m_nRet = MV_OK;
+        m_nRet = m_pcHikCamera->SoftTrigger();
+       //m_pcHikCamera->ReadBuffer(*myImage);
        //display_myImage(myImage);//相机图像
 
     }
@@ -177,7 +179,9 @@ void PlayControl::on_pushButton_grabbing_clicked()
     // 图像采集控件
     ui->pushButton_grabbing->setEnabled(false);
     ui->pushButton_stop->setEnabled(true);
-    ui->pushButton_softTrigger->setEnabled(true);
+    if(m_nTriggerMode==1){
+        ui->pushButton_softTrigger->setEnabled(true);
+    }
     // 保存图像控件
     ui->pushButton_saveBmp->setEnabled(true);
     ui->pushButton_saveJpg->setEnabled(true);
@@ -252,48 +256,52 @@ void PlayControl::display_myImage(const Mat* imagePrt)
     cv::cvtColor(*imagePrt, rgb, CV_BGR2RGB);
     // Pinch(rgb1,rgb,10);
     //判断是黑白、彩色图像
-    QImage QmyImage;
+    QImage dispImage;
     if (rgb.channels() > 1)
     {
-        QmyImage =QImage((const unsigned char*)(rgb.data),
+        dispImage =QImage((const unsigned char*)(rgb.data),
                           rgb.cols,rgb.rows,
                           rgb.cols*rgb.channels(),
                           QImage::Format_RGB888);
     }
     else
     {
-        QmyImage = QImage((const unsigned char*)(rgb.data), rgb.cols, rgb.rows, QImage::Format_Indexed8);
+        dispImage = QImage((const unsigned char*)(rgb.data), rgb.cols, rgb.rows, QImage::Format_Indexed8);
     }
 
-    QmyImage = (QmyImage).scaled(ui->label_play->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    dispImage = (dispImage).scaled(ui->label_play->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     ui->label_play->setScaledContents(true);
     //显示图像
-    ui->label_play->setPixmap(QPixmap::fromImage(QmyImage));
+    ui->label_play->setPixmap(QPixmap::fromImage(dispImage));
     //ui->label_play->show();
     //    Sleep(1);
 }
 
 
 //保存图片
-int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE m_nSaveImageType){
+int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE nSaveImageType){
     // ch:获取1张图 | en:Get one frame
     MV_FRAME_OUT_INFO_EX stImageInfo = { 0 };
     memset(&stImageInfo, 0, sizeof(MV_FRAME_OUT_INFO_EX));
+    m_hSaveImageMux.lock();
+    if(!m_pcHikCamera->m_pBufForSaveImage||stImageInfo.enPixelType==0){
+        m_hSaveImageMux.unlock();
+        return MV_E_NODATA;
+    }
     unsigned int nDataLen = 0;
-    nRet = MV_OK;
+    m_nRet = MV_OK;
     // ch:仅在第一次保存图像时申请缓存，在 CloseDevice 时释放
     // en:Request buffer first time save image, release after CloseDevice
     if (!m_pcHikCamera->m_pBufForDriver)
     {
         unsigned int nRecvBufSize = 0;
-        nRet = m_pcHikCamera->GetIntValue("PayloadSize", &nRecvBufSize);
+        m_nRet = m_pcHikCamera->GetIntValue("PayloadSize", &nRecvBufSize);
 
         m_pcHikCamera->m_nBufSizeForDriver = nRecvBufSize;  // 一帧数据大小
         m_pcHikCamera->m_pBufForDriver = (unsigned char*)malloc(m_pcHikCamera->m_nBufSizeForDriver);
     }
-
-    nRet = m_pcHikCamera->GetOneFrameTimeout(m_pcHikCamera->m_pBufForDriver, &nDataLen, m_pcHikCamera->m_nBufSizeForDriver, &stImageInfo, 1000);
-    if (MV_OK == nRet)
+    //m_nRet = m_pcHikCamera->GetOneFrameTimeout(m_pcHikCamera->m_pBufForDriver, &nDataLen, m_pcHikCamera->m_nBufSizeForDriver, &stImageInfo, 1000);
+    if (MV_OK == m_nRet)
     {
         // ch:仅在第一次保存图像时申请缓存，在 CloseDevice 时释放
         // en:Request buffer first time save image, release after CloseDevice
@@ -302,13 +310,12 @@ int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE m_nSaveImageType){
             // ch:BMP图片大小：width * height * 3 + 2048(预留BMP头大小)
             // en:BMP image size: width * height * 3 + 2048 (Reserved BMP header size)
             m_pcHikCamera->m_nBufSizeForSaveImage = stImageInfo.nWidth * stImageInfo.nHeight * 3 + 2048;
-
             m_pcHikCamera->m_pBufForSaveImage = (unsigned char*)malloc(m_pcHikCamera->m_nBufSizeForSaveImage);
 
         }
         // ch:设置对应的相机参数 | en:Set camera parameter
         MV_SAVE_IMAGE_PARAM_EX stParam = { 0 };
-        stParam.enImageType = m_nSaveImageType; // ch:需要保存的图像类型 | en:Image format to save;
+        stParam.enImageType = nSaveImageType; // ch:需要保存的图像类型 | en:Image format to save;
         stParam.enPixelType = stImageInfo.enPixelType;  // 相机对应的像素格式 | en:Pixel format
         stParam.nBufferSize = m_pcHikCamera->m_nBufSizeForSaveImage;  // 存储节点的大小 | en:Buffer node size
         stParam.nWidth = stImageInfo.nWidth;         // 相机对应的宽 | en:Width
@@ -318,7 +325,7 @@ int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE m_nSaveImageType){
         stParam.pImageBuffer = m_pcHikCamera->m_pBufForSaveImage;
         stParam.nJpgQuality = 90;       // ch:jpg编码，仅在保存Jpg图像时有效。保存BMP时SDK内忽略该参数
 
-        nRet = m_pcHikCamera->SaveImage(&stParam);
+        m_nRet = m_pcHikCamera->SaveImage(&stParam);
 
         char chImageName[IMAGE_NAME_LEN] = { 0 };
         if (MV_Image_Bmp == stParam.enImageType)
@@ -332,6 +339,16 @@ int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE m_nSaveImageType){
             //sprintf_s(chImageName, IMAGE_NAME_LEN, "Image_w%d_h%d_fn%03d_L.bmp", stImageInfo.nWidth, stImageInfo.nHeight, stImageInfo.nFrameNum);
             sprintf_s(chImageName, IMAGE_NAME_LEN, "%d-current_image.jpg", stImageInfo.nFrameNum);
         }
+        else if (MV_Image_Tif== stParam.enImageType)
+        {
+            //sprintf_s(chImageName, IMAGE_NAME_LEN, "Image_w%d_h%d_fn%03d_L.bmp", stImageInfo.nWidth, stImageInfo.nHeight, stImageInfo.nFrameNum);
+            sprintf_s(chImageName, IMAGE_NAME_LEN, "%d-current_image.tif", stImageInfo.nFrameNum);
+        }
+        else if (MV_Image_Png == stParam.enImageType)
+        {
+            //sprintf_s(chImageName, IMAGE_NAME_LEN, "Image_w%d_h%d_fn%03d_L.bmp", stImageInfo.nWidth, stImageInfo.nHeight, stImageInfo.nFrameNum);
+            sprintf_s(chImageName, IMAGE_NAME_LEN, "%d-current_image.png", stImageInfo.nFrameNum);
+        }
         //qDebug() << chImageName;
         //将图片保存到指定路径
         QString filename=QFileDialog::getSaveFileName(this,tr("save Image"),chImageName);
@@ -343,29 +360,42 @@ int PlayControl::saveImage(MV_SAVE_IAMGE_TYPE m_nSaveImageType){
         //ui->label_debug->setText("save imgs");
         fclose(fp);
     }
-    return MV_OK;
+     m_hSaveImageMux.unlock();
+    return m_nRet;
 }
 //图片保存为BMP
 void PlayControl::on_pushButton_saveBmp_clicked()
 {
-    nRet = saveImage(MV_Image_Bmp);
-    if(nRet != MV_OK){
+    m_nRet = saveImage(MV_Image_Bmp);
+    if(m_nRet != MV_OK){
         showErrorMsg("NO IMAGE",11);
     }else{
         QMessageBox::information(nullptr,"SAVE BMP","Save Image Successed",QMessageBox::Yes);
     }
 }
-
-void PlayControl::paintEvent(QPaintEvent *paintEvent)
-{
-    ui->label_play->resize(size());
-}
-
 //图片保存为JPG
 void PlayControl::on_pushButton_saveJpg_clicked()
 {
-    nRet = saveImage(MV_Image_Jpeg);
-    if(nRet != MV_OK){
+    m_nRet = saveImage(MV_Image_Jpeg);
+    if(m_nRet != MV_OK){
+        showErrorMsg("NO IMAGE",11);
+    }else{
+        QMessageBox::information(nullptr,"SAVE JPEG","Save Image Successed",QMessageBox::Yes);
+    }
+}
+//图片保存为Png
+void PlayControl::on_pushButton_savePng_clicked(){
+    m_nRet = saveImage(MV_Image_Png);
+    if(m_nRet != MV_OK){
+        showErrorMsg("NO IMAGE",11);
+    }else{
+        QMessageBox::information(nullptr,"SAVE JPEG","Save Image Successed",QMessageBox::Yes);
+    }
+}
+//图片保存为Tiff
+void PlayControl::on_pushButton_saveTiff_clicked(){
+    m_nRet = saveImage(MV_Image_Tif);
+    if(m_nRet != MV_OK){
         showErrorMsg("NO IMAGE",11);
     }else{
         QMessageBox::information(nullptr,"SAVE JPEG","Save Image Successed",QMessageBox::Yes);

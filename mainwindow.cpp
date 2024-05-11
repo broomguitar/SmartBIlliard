@@ -32,7 +32,7 @@ MainWindow::MainWindow(QWidget *parent)
     timeLabel->setStyleSheet("color:#FFF5EE");
     timeLabel->setFont(QFont("Microsoft YaHei", 10, QFont::Bold,true));
     string versionStr;
-    int version=HIKCamera::GetSdkVersion(versionStr);
+    HIKCamera::GetSdkVersion(versionStr);
     QLabel *label_version=new QLabel(QString("SDK版本：%1").arg(QString::fromStdString(versionStr)),this);
     label_version->setStyleSheet("color:#FEFEFE");
     label_version ->setFont(QFont("Microsoft YaHei",10));
@@ -43,7 +43,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->statusBar->showMessage(tr("临时信息!"),2000);//显示临时信息2000ms 前面的正常信息被覆盖 当去掉后一项时，会一直显示
     QLabel *permanent=new QLabel(this);
     QPalette pe;
-    pe.setColor(QPalette::WindowText,"#03A89E");
+    //"#03A89E"
+    pe.setColor(QPalette::WindowText,QColor(0x03,0xA8,0x9E));
     permanent->setPalette(pe);
     permanent->setText(tr("Cogito ergo sum"));
     QFont font=QFont("Microsoft YaHei", 14, QFont::Bold,true);

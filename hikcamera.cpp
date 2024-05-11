@@ -5,7 +5,7 @@ HIKCamera::HIKCamera(MV_CC_DEVICE_INFO * pDeviceInfo):m_pDeviceInfo(pDeviceInfo)
 };
 HIKCamera::~HIKCamera(){
     if(m_hDevHandle){
-        MV_CC_DestroyHandle(m_hDevHandle);
+        MV_CC_DestroyHandle(m_hDevHandle);    
         m_hDevHandle=nullptr;
     }
 }
@@ -95,6 +95,11 @@ int HIKCamera::Open(){
 int HIKCamera::Close(){
     if(!m_hDevHandle){
         return MV_E_HANDLE;
+    }
+    if (m_pBufForSaveImage)
+    {
+        free(m_pBufForSaveImage);
+        m_pBufForSaveImage = nullptr;
     }
     MV_CC_CloseDevice(m_hDevHandle);
     int nRet=MV_CC_DestroyHandle(m_hDevHandle);
@@ -471,7 +476,11 @@ int HIKCamera::ReadBuffer(cv::Mat& image)
         return -1;
     }
     m_nBufSizeForSaveImage = stImageInfo.nWidth * stImageInfo.nHeight * 3 + 2048;
-    unsigned char* m_pBufForSaveImage;
+    if (m_pBufForSaveImage)
+    {
+        free(m_pBufForSaveImage);
+        m_pBufForSaveImage = nullptr;
+    }
     m_pBufForSaveImage = (unsigned char*)malloc(m_nBufSizeForSaveImage);
 
 
@@ -515,7 +524,6 @@ int HIKCamera::ReadBuffer(cv::Mat& image)
     (*getImage).copyTo(image);
     (*getImage).release();
     free(pData);
-    free(m_pBufForSaveImage);
     return 0;
 }
 
@@ -523,10 +531,12 @@ int HIKCamera::ReadBuffer(cv::Mat &image,unsigned char *pData, MV_FRAME_OUT_INFO
 {
     cv::Mat* getImage = new cv::Mat();
     m_nBufSizeForSaveImage = stImageInfo->nWidth * stImageInfo->nHeight * 3 + 2048;
-    unsigned char* m_pBufForSaveImage;
+    if (m_pBufForSaveImage)
+    {
+        free(m_pBufForSaveImage);
+        m_pBufForSaveImage = nullptr;
+    }
     m_pBufForSaveImage = (unsigned char*)malloc(m_nBufSizeForSaveImage);
-
-
     bool isMono;
     switch (stImageInfo->enPixelType)
     {
@@ -565,7 +575,6 @@ int HIKCamera::ReadBuffer(cv::Mat &image,unsigned char *pData, MV_FRAME_OUT_INFO
     }
     (*getImage).copyTo(image);
     (*getImage).release();
-    free(m_pBufForSaveImage);
     return 0;
 
 }

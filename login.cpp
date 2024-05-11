@@ -72,3 +72,4 @@ void Login::setAreaMovable(const QRect rt)
         m_areaMovable = rt;
     }
 }
+

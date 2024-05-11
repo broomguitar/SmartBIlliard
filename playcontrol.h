@@ -1,6 +1,7 @@
 #ifndef PLAYCONTROL_H
 #define PLAYCONTROL_H
 #include <QWidget>
+#include <QMutex>
 #include "hikcamera.h"
 QT_BEGIN_NAMESPACE
 namespace Ui { class PlayControl; }
@@ -34,10 +35,12 @@ private slots:
     void on_pushButton_saveJpg_clicked();
 
     void on_pushButton_saveBmp_clicked();
+    void on_pushButton_savePng_clicked();
+    void on_pushButton_saveTiff_clicked();
 private:
     HIKCamera* m_pcHikCamera;         // 相机指针对象
 public:
-    int nRet;
+    int m_nRet;
     void* m_hGrabThread;                        // ch:取流线程句柄 | en:Grab thread handle
     bool m_bThreadState;
     bool m_bOpenDevice;                        // ch:是否打开设备 | en:Whether to open device
@@ -51,6 +54,7 @@ protected:
     void paintEvent(QPaintEvent * paintEvent) override;
     //自定义方法
 private:
+     QMutex        m_hSaveImageMux;
     int loadDevices(unsigned int nTLayerType);
     //显示错误信息
     void showErrorMsg(QString qMessage, int nErrorNum);

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>739</width>
+    <width>901</width>
     <height>520</height>
    </rect>
   </property>
@@ -100,6 +100,20 @@
        <widget class="QPushButton" name="pushButton_saveJpg">
         <property name="text">
          <string>保存JPG</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_savePng">
+        <property name="text">
+         <string>保存PNG</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_saveTiff">
+        <property name="text">
+         <string>保存Tiff</string>
         </property>
        </widget>
       </item>
